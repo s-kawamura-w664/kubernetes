@@ -313,6 +313,7 @@ func ReadLogs(ctx context.Context, path, containerID string, opts *LogOptions, r
 	var parse parseFunc
 	var stop bool
 	found := true
+	adddir := false
 	writer := newLogWriter(stdout, stderr, opts)
 	msg := &logMessage{}
 	for {
@@ -358,9 +359,24 @@ func ReadLogs(ctx context.Context, path, containerID string, opts *LogOptions, r
 					newF, err := os.Open(path)
 					if err != nil {
 						if os.IsNotExist(err) {
+							if adddir == false {
+								filedir := filepath.Dir(path)
+								if err := watcher.Add(filedir); err != nil {
+									klog.ErrorS(err, "failed to add the directory to watcher", "dir", filedir)
+								}else{
+									adddir = true
+								}
+							}
 							continue
 						}
 						return fmt.Errorf("failed to open log file %q: %v", path, err)
+					}
+					if adddir {
+						filedir := filepath.Dir(path)
+						if err := watcher.Remove(filedir); err != nil {
+							klog.ErrorS(err, "failed to remove the directory from watcher", "dir", filedir)
+						}
+						adddir = false
 					}
 					defer newF.Close()
 					f.Close()
